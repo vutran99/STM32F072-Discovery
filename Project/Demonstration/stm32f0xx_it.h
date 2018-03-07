@@ -1,6 +1,6 @@
 /**
   ******************************************************************************
-  * @file    stm32f0xx_it.h 
+  * @file    IWDG_Reset/stm32f0xx_it.h 
   * @author  MCD Application Team
   * @version V1.0.0
   * @date    23-March-2012
@@ -46,6 +46,8 @@ void HardFault_Handler(void);
 void SVC_Handler(void);
 void PendSV_Handler(void);
 void SysTick_Handler(void);
+void TIM14_IRQHandler(void);
+void EXTI0_1_IRQHandler(void);
 
 #ifdef __cplusplus
 }

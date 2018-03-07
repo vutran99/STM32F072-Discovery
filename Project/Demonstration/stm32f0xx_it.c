@@ -1,6 +1,6 @@
 /**
   ******************************************************************************
-  * @file    stm32f0xx_it.c 
+  * @file    IWDG_Reset/stm32f0xx_it.c 
   * @author  MCD Application Team
   * @version V1.0.0
   * @date    23-March-2012
@@ -29,14 +29,13 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f0xx_it.h"
-#include "main.h"
+#include "stm32f0_discovery.h"
 
-/** @addtogroup STM32F0-Discovery_Demo
+/** @addtogroup STM32F0_Discovery_Peripheral_Examples
   * @{
   */
 
-/** @addtogroup STM32F0XX_IT
-  * @brief Interrupts driver modules
+/** @addtogroup IWDG_Reset
   * @{
   */
 
@@ -44,6 +43,11 @@
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
+extern __IO uint32_t TimingDelay;
+uint16_t IC1ReadValue1 = 0, IC1ReadValue2 = 0;
+__IO uint16_t CaptureNumber = 0;
+__IO uint32_t Capture = 0;
+extern uint32_t LsiFreq;
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
 
@@ -98,7 +102,7 @@ void PendSV_Handler(void)
   */
 void SysTick_Handler(void)
 {
-  TimingDelay_Decrement(); 
+  TimingDelay--;
 }
 
 /******************************************************************************/
@@ -107,6 +111,65 @@ void SysTick_Handler(void)
 /*  available peripheral interrupt handler's name please refer to the startup */
 /*  file (startup_stm32f0xx.s).                                               */
 /******************************************************************************/
+
+/**
+  * @brief  This function handles External line 0 interrupt request.
+  * @param  None
+  * @retval None
+  */
+void EXTI0_1_IRQHandler(void)
+{
+  if (EXTI_GetITStatus(USER_BUTTON_EXTI_LINE) != RESET)
+  {  
+    /* Clear the USER Button EXTI Line Pending Bit */
+    EXTI_ClearITPendingBit(USER_BUTTON_EXTI_LINE);
+    
+    /* As the following address is invalid (not mapped), a Hardfault exception
+       will be generated with an infinite loop and when the IWDG counter falls to 63
+       the IWDG reset occurs */
+    *(__IO uint32_t *) 0x00040001 = 0xFF;
+  }
+}
+
+/**
+  * @brief  This function handles TIM14 global interrupt request.
+  * @param  None
+  * @retval None
+  */
+void TIM14_IRQHandler(void)
+{
+  if (TIM_GetITStatus(TIM14, TIM_IT_CC1) != RESET)
+  {    
+    if(CaptureNumber == 0)
+    {
+      /* Get the Input Capture value */
+      IC1ReadValue1 = TIM_GetCapture1(TIM14);
+    }
+    else if(CaptureNumber == 1)
+    {
+      /* Get the Input Capture value */
+      IC1ReadValue2 = TIM_GetCapture1(TIM14); 
+      
+      /* Capture computation */
+      if (IC1ReadValue2 > IC1ReadValue1)
+      {
+        Capture = (IC1ReadValue2 - IC1ReadValue1); 
+      }
+      else
+      {
+        Capture = ((0xFFFF - IC1ReadValue1) + IC1ReadValue2); 
+      }
+      /* Frequency computation */ 
+      LsiFreq = (uint32_t) SystemCoreClock / Capture;
+      LsiFreq *= 8;
+    }
+    
+    CaptureNumber++;
+    
+    /* Clear TIM14 Capture compare interrupt pending bit */
+    TIM_ClearITPendingBit(TIM14, TIM_IT_CC1);
+  }
+}
 
 /**
   * @brief  This function handles PPP interrupt request.

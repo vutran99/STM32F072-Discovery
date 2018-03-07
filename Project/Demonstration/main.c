@@ -1,6 +1,6 @@
 /**
   ******************************************************************************
-  * @file    main.c 
+  * @file    IWDG_Reset/main.c 
   * @author  MCD Application Team
   * @version V1.0.0
   * @date    23-March-2012
@@ -23,23 +23,31 @@
   * limitations under the License.
   *
   ******************************************************************************
-  */ 
+  */
 
 /* Includes ------------------------------------------------------------------*/
-#include "main.h"
+#include "stm32f0xx.h"
+#include "stm32f0_discovery.h"
 
-/** @addtogroup STM32F0-Discovery_Demo
+/** @addtogroup STM32F0_Discovery_Peripheral_Examples
+  * @{
+  */
+
+/** @addtogroup IWDG_Reset
   * @{
   */
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
+#define LSI_TIM_MEASURE
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
-static __IO uint32_t TimingDelay;
-uint8_t BlinkSpeed = 1;
-
+__IO uint32_t TimingDelay = 0;
+__IO uint32_t LsiFreq = 0;
+extern __IO uint16_t CaptureNumber;
 /* Private function prototypes -----------------------------------------------*/
+void Delay(__IO uint32_t nTime);
+void TIM14_ConfigForLSI(void);
 /* Private functions ---------------------------------------------------------*/
 
 /**
@@ -49,114 +57,197 @@ uint8_t BlinkSpeed = 1;
   */
 int main(void)
 {
-  RCC_ClocksTypeDef RCC_Clocks;
-  
-  /* Configure LED3 and LED4 on STM32F0-Discovery */
+  /*!< At this stage the microcontroller clock setting is already configured, 
+       this is done through SystemInit() function which is called from startup
+       file (startup_stm32f0xx.s) before to branch to application main.
+       To reconfigure the default setting of SystemInit() function, refer to
+       system_stm32f0xx.c file
+     */
+
+  /* Initialize LED3,4 and user Button mounted on STM32f0_discovery board */       
   STM_EVAL_LEDInit(LED3);
   STM_EVAL_LEDInit(LED4);
+  STM_EVAL_PBInit(BUTTON_USER, BUTTON_MODE_EXTI);
+
+  /* Setup SysTick Timer for 1 msec interrupts  */
+  if (SysTick_Config(SystemCoreClock / 1000))
+  { 
+    /* Capture error */ 
+    while (1);
+  }
+
+  /* Check if the system has resumed from IWDG reset */
+  if (RCC_GetFlagStatus(RCC_FLAG_IWDGRST) != RESET)
+  {
+    /* IWDGRST flag set */
+    /* Turn on LED3 */
+    STM_EVAL_LEDOn(LED3);
+
+    /* Clear reset flags */
+    RCC_ClearFlag();
+  }
+  else
+  {
+    /* IWDGRST flag is not set */
+    /* Turn off LED3 */
+    STM_EVAL_LEDOff(LED3);
+  }
+
+#ifdef LSI_TIM_MEASURE
+  /* TIM Configuration -------------------------------------------------------*/
+  TIM14_ConfigForLSI();
   
-  /* Initialize User_Button on STM32F0-Discovery */
-  STM_EVAL_PBInit(BUTTON_USER, BUTTON_MODE_GPIO);
+  /* Wait until the TIM14 get 2 LSI edges */
+  while(CaptureNumber != 2)
+  {
+  }
+
+  /* Disable TIM14 CC1 Interrupt Request */
+  TIM_ITConfig(TIM14, TIM_IT_CC1, DISABLE);
+#endif
   
-  /* SysTick end of count event each 1ms */
-  RCC_GetClocksFreq(&RCC_Clocks);
-  SysTick_Config(RCC_Clocks.HCLK_Frequency / 1000);
-   
-  /* Initiate Blink Speed variable */ 
-  BlinkSpeed = 1;
-  
-  while(1)
-  {  
-    /* Check if the user button is pressed */
-    if(STM_EVAL_PBGetState(BUTTON_USER)== SET)
-    {
-      /* BlinkSpeed: 1 -> 2 -> 0, then re-cycle */
-      /* Turn on LD4 Blue LED during 1s each time User button is pressed */
-      STM_EVAL_LEDOn(LED4);
-      
-      /* wait for 1s */
-      Delay(1000);
-      
-      /* Turn off LD4 Blue LED after 1s each time User button is pressed */
-      STM_EVAL_LEDOff(LED4);
-      
-      /* Increment the blink speed counter */
-      BlinkSpeed++;
-      
-      /* Default value for blink speed counter */
-      if(BlinkSpeed == 3)
-      {  
-        BlinkSpeed = 0;
-      }
-    }
-    
-    /* Test on blink speed */
-    if(BlinkSpeed == 2)
-    {
-      /* LED3 toggles each 100 ms */
-      STM_EVAL_LEDToggle(LED3);
-      
-      /* maintain LED3 status for 100ms */
-      Delay(100);
-    }
-    else if(BlinkSpeed == 1)
-    {
-      /* LED3 toggles each 200 ms */
-      STM_EVAL_LEDToggle(LED3);
-      
-      /* maintain LED3 status for 200ms */
-      Delay(200);
-    }
-    else
-    {  
-      /* LED3 Off */
-      STM_EVAL_LEDOff(LED3);
-    }
+  /* IWDG timeout equal to 250 ms (the timeout may varies due to LSI frequency
+     dispersion) */
+  /* Enable write access to IWDG_PR and IWDG_RLR registers */
+  IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);
+
+  /* IWDG counter clock: LSI/32 */
+  IWDG_SetPrescaler(IWDG_Prescaler_32);
+
+  /* Set counter reload value to obtain 250ms IWDG TimeOut.
+     Counter Reload Value = 250ms/IWDG counter clock period
+                          = 250ms / (LSI/32)
+                          = 0.25s / (LsiFreq/32)
+                          = LsiFreq/(32 * 4)
+                          = LsiFreq/128
+   */
+  IWDG_SetReload(LsiFreq/128);
+
+  /* Reload IWDG counter */
+  IWDG_ReloadCounter();
+
+  /* Enable IWDG (the LSI oscillator will be enabled by hardware) */
+  IWDG_Enable();
+
+  while (1)
+  {
+    /* Toggle LED4 */
+    STM_EVAL_LEDToggle(LED4);
+
+    /* Insert 240 ms delay */
+    Delay(240);
+
+    /* Reload IWDG counter */
+    IWDG_ReloadCounter();  
   }
 }
 
+
 /**
   * @brief  Inserts a delay time.
-  * @param  nTime: specifies the delay time length, in 1 ms.
+  * @param  nTime: specifies the delay time length, in milliseconds.
   * @retval None
   */
 void Delay(__IO uint32_t nTime)
-{
+{ 
   TimingDelay = nTime;
 
   while(TimingDelay != 0);
 }
 
+#ifdef LSI_TIM_MEASURE
 /**
-  * @brief  Decrements the TimingDelay variable.
+  * @brief  Configures TIM14 to measure the LSI oscillator frequency.
   * @param  None
   * @retval None
   */
-void TimingDelay_Decrement(void)
+void TIM14_ConfigForLSI(void)
 {
-  if (TimingDelay != 0x00)
-  { 
-    TimingDelay--;
-  }
+  NVIC_InitTypeDef NVIC_InitStructure;
+  TIM_ICInitTypeDef  TIM_ICInitStructure;
+  
+  /* Enable peripheral clocks ------------------------------------------------*/
+  RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
+
+  /* Allow access to the RTC */
+  PWR_BackupAccessCmd(ENABLE);
+
+  /* Reset RTC Domain */
+  RCC_BackupResetCmd(ENABLE);
+  RCC_BackupResetCmd(DISABLE);
+  
+  /*!< LSI Enable */
+  RCC_LSICmd(ENABLE);
+  
+  /*!< Wait till LSI is ready */
+  while (RCC_GetFlagStatus(RCC_FLAG_LSIRDY) == RESET)
+  {}
+  
+  /* Select the RTC Clock Source */
+  RCC_RTCCLKConfig(RCC_RTCCLKSource_LSI);
+   
+  /* Enable the RTC Clock */
+  RCC_RTCCLKCmd(ENABLE);
+
+  /* Wait for RTC APB registers synchronisation */
+  RTC_WaitForSynchro();
+  
+  /* Enable TIM14 clocks */
+  RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM14, ENABLE);  
+  
+  /* Enable the TIM14 Interrupt */
+  NVIC_InitStructure.NVIC_IRQChannel = TIM14_IRQn;
+  NVIC_InitStructure.NVIC_IRQChannelPriority = 0;
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&NVIC_InitStructure);
+  
+  /* Configure TIM14 prescaler */
+  TIM_PrescalerConfig(TIM14, 0, TIM_PSCReloadMode_Immediate);
+  
+  /* Connect internally the TM14_CH1 Input Capture to the LSI clock output */
+  TIM_RemapConfig(TIM14, TIM14_RTC_CLK);
+  
+  /* TIM14 configuration: Input Capture mode ---------------------
+     The LSI oscillator is connected to TIM14 CH1
+     The Rising edge is used as active edge,
+     The TIM14 CCR1 is used to compute the frequency value 
+  ------------------------------------------------------------ */
+  TIM_ICInitStructure.TIM_Channel = TIM_Channel_1;
+  TIM_ICInitStructure.TIM_ICPolarity = TIM_ICPolarity_Rising;
+  TIM_ICInitStructure.TIM_ICSelection = TIM_ICSelection_DirectTI;
+  TIM_ICInitStructure.TIM_ICPrescaler = TIM_ICPSC_DIV8;
+  TIM_ICInitStructure.TIM_ICFilter = 0;
+  TIM_ICInit(TIM14, &TIM_ICInitStructure);
+  
+  /* TIM14 Counter Enable */
+  TIM_Cmd(TIM14, ENABLE);
+
+  /* Reset the flags */
+  TIM14->SR = 0;
+    
+  /* Enable the CC1 Interrupt Request */  
+  TIM_ITConfig(TIM14, TIM_IT_CC1, ENABLE);  
 }
+#endif
 
 #ifdef  USE_FULL_ASSERT
 
 /**
   * @brief  Reports the name of the source file and the source line number
-  *   where the assert_param error has occurred.
+  *         where the assert_param error has occurred.
   * @param  file: pointer to the source file name
   * @param  line: assert_param error line source number
   * @retval None
   */
 void assert_failed(uint8_t* file, uint32_t line)
-{ 
+{
   /* User can add his own implementation to report the file name and line number,
      ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
 
   /* Infinite loop */
   while (1)
-  {}
+  {
+  }
 }
 #endif
 
@@ -164,5 +255,8 @@ void assert_failed(uint8_t* file, uint32_t line)
   * @}
   */
 
+/**
+  * @}
+  */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
