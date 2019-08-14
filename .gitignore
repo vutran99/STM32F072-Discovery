@@ -4,3 +4,7 @@ Project/Demonstration/EWARM/settings/STM32F0-Discovery_Demo.STM32F0_Discovery.cs
 Project/Demonstration/EWARM/settings/STM32F0-Discovery_Demo.STM32F0_Discovery.driver.xcl
 Project/Demonstration/EWARM/STM32F0_Discovery/Obj.o
 Project/Demonstration/EWARM/STM32F0_Discovery/Obj/
+Project/Demonstration/EWARM/settings/STM32F0-Discovery_Demo.wspos
+Project/Demonstration/EWARM/settings/STM32F0-Discovery_Demo.crun
+Project/Demonstration/EWARM/settings/STM32F0-Discovery_Demo.dbgdt
+Project/Demonstration/EWARM/settings/STM32F0-Discovery_Demo.dni
