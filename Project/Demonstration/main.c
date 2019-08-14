@@ -48,6 +48,8 @@ extern __IO uint16_t CaptureNumber;
 /* Private function prototypes -----------------------------------------------*/
 void Delay(__IO uint32_t nTime);
 void TIM14_ConfigForLSI(void);
+
+
 /* Private functions ---------------------------------------------------------*/
 
 /**
